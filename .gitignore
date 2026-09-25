@@ -1,0 +1,74 @@
+# CMake output and local build trees
+/build*/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+install_manifest.txt
+compile_commands.json
+
+# Compiled objects, libraries, executables and debug symbols
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.pdb
+*.ilk
+*.dSYM/
+/packetforge
+/packetforge_tests
+/benchmark_baseline
+/benchmark_optimized
+/benchmark_scaling
+
+# Editor and operating-system metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated benchmark, profiling, coverage and sanitizer output
+benchmark_results*
+perf.data*
+callgrind.out*
+vgcore.*
+core
+core.*
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+/coverage/
+/lcov.info
+/asan.*
+/ubsan.*
+/tsan.*
+/validation/
+*.log
+
+# Packet captures and environment secrets
+*.pcap
+*.pcapng
+.env
+.env.*
+*.pem
+*.key
+
+# Python caches and temporary files
+__pycache__/
+*.py[cod]
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+/tmp/
