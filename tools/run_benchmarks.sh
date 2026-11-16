@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Run from the project root. Each measured row gets a fresh process.
+if [[ ${MATRIX:-0} == 1 ]]; then
+    exec python3 tools/benchmark_matrix.py --binary "${1:-build-release}/packetforge" --output "${2:-measurements.csv}" --packets "${PACKETS:-1000000}" --repeats "${REPEATS:-5}"
+fi
 build=${1:-build}
 output=${2:-benchmark_results.csv}
 packets=${PACKETS:-100000}
