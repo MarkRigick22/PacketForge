@@ -19,6 +19,7 @@ class MemoryPool {
     size_t failures_ = 0;
 
   public:
+    // Clarification: the optimized packet hot path avoids allocation; setup and the baseline do allocate.
     MemoryPool(size_t count, size_t capacity);//the only part we allocate memory in the whole system instead of malloc/free
     PacketBuffer* acquire();
     void release(PacketBuffer* buffer);

@@ -8,6 +8,7 @@ void MemoryPool::AlignedDelete::operator()(uint8_t* p) const {
 MemoryPool::MemoryPool(size_t count, size_t capacity) : count_(count), stride_(0) {
     if (!count || capacity < 64 || capacity > 65549 || count > 10000000)
         throw std::invalid_argument("invalid pool dimensions");
+    // Clarification: this rounds capacity UP to the next multiple of 64.
     stride_ = (capacity + 63) & ~size_t(63);//floor the capapcity to be multiplication of 64
     if (count > std::numeric_limits<size_t>::max() / stride_)
         throw std::overflow_error("arena size overflow");

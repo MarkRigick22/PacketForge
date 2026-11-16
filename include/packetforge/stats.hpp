@@ -1,5 +1,6 @@
 #pragma once
 #include "cnet/packet.h"
+#include "processing.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -23,6 +24,7 @@ struct Latencies {
 };
 struct alignas(64) WorkerStats {
     uint64_t packets = 0, bytes = 0, drops = 0, digest = 0;
+    uint64_t allocation_drops = 0, policy_drops = 0, egress_drops = 0, malformed = 0, recycled = 0, tx_high_water = 0;
     Latencies latency;
 };
 struct Stats {
@@ -30,9 +32,13 @@ struct Stats {
              unsupported = 0;
     uint64_t ethernet = 0, ipv4 = 0, tcp = 0, udp = 0, rx_full = 0, tx_full = 0,
              pool_exhaustion = 0, digest = 0;
+    uint64_t allocation_drops = 0, policy_drops = 0, egress_drops = 0, recycled = 0;
+    size_t flow_capacity = 0, active_flows = 0;
+    uint64_t flow_evictions = 0, flow_collisions = 0;
+    std::vector<std::vector<FlowEntry>> flows;
     double seconds = 0, p50_us = 0, p95_us = 0, p99_us = 0;
     size_t buffers_total = 0, buffers_in_use = 0, pool_failures = 0, arena_bytes = 0;
-    std::vector<uint64_t> per_worker, worker_bytes, worker_drops, queue_high_water;
+    std::vector<uint64_t> per_worker, worker_bytes, worker_drops, queue_high_water, tx_high_water;
     double pps() const {
         return seconds > 0 ? processed / seconds : 0;
     }

@@ -13,7 +13,7 @@ void on_signal(int) {
     interrupted = 1;
 }
 size_t number(const std::string& s) {
-    if (s.empty() || s[0] == '-')
+    if (s.empty() || s.find_first_not_of("0123456789") != std::string::npos)
         throw std::invalid_argument("expected nonnegative integer");
     size_t used = 0;
     auto v = std::stoull(s, &used);
@@ -26,9 +26,9 @@ int main(int argc, char** argv) {
     try {
         pf::Config c;
         pf::TrafficConfig traffic;
-        size_t packets = 100000;
+        size_t packets = 100000, prebuilt = 0, skew = 0;
         bool baseline = false, csv = false, wait = true;
-        std::string source = "synthetic", path;
+        std::string source = "synthetic", path, egress;
         bool source_set = false;
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
@@ -60,9 +60,15 @@ Usage: packetforge [--synthetic | --pcap FILE | --tap NAME] [options]
   --drop-on-pressure  Drop instead of waiting at ingress
   --fault-rx-every N  Reject every Nth RX attempt (0 disables)
   --fault-tx-every N  Reject every Nth worker TX attempt (0 disables)
+  --prebuilt N        Prepare N synthetic frames before timing (0 generates inline)
+  --skew-percent N    Fraction of synthetic packet ordinals using flow zero
+  --tap-out NAME      Opt-in TAP egress in isolated netns; distinct pf-* interfaces
+  --rules FILE        First-match rules: ACTION SRC DST SPORT DPORT PROTO; * wildcard
+  --flow-capacity N   Entries per worker, 0 disables; multiple of 4
+  --batch-size N      Optimized RX service batch, 1..65536 (default 32)
   --csv               Machine-readable header and one result row
   --help              Show this help
-TAP is Linux-only, RX-to-simulated-TX sink; Ctrl-C drains pending work.
+TAP defaults to RX-to-simulated-TX sink; --tap-out selects virtual egress; Ctrl-C drains pending work.
 PCAP: classic Ethernet PCAP, unpaced; no external library required.
 )";
                 return 0;
@@ -78,6 +84,18 @@ PCAP: classic Ethernet PCAP, unpaced; no external library required.
                 packets = number(value());
             else if (arg == "--workers")
                 c.workers = number(value());
+            else if (arg == "--prebuilt")
+                prebuilt = number(value());
+            else if (arg == "--skew-percent")
+                skew = number(value());
+            else if (arg == "--tap-out")
+                egress = value();
+            else if (arg == "--rules")
+                c.rules = pf::load_rules(value());
+            else if (arg == "--flow-capacity")
+                c.flow_capacity = number(value());
+            else if (arg == "--batch-size")
+                c.batch_size = number(value());
             else if (arg == "--flows")
                 traffic.flows = number(value());
             else if (arg == "--size")
@@ -112,13 +130,29 @@ PCAP: classic Ethernet PCAP, unpaced; no external library required.
         }
         if (baseline && (c.faults.reject_rx_every || c.faults.reject_tx_every))
             throw std::invalid_argument("device fault injection requires optimized mode");
+        if (!egress.empty()) {
+            if (source != "tap" || path == egress || path.rfind("pf-", 0) != 0)
+                throw std::invalid_argument("--tap-out requires distinct --tap pf-INPUT and --tap-out pf-OUTPUT");
+            c.sink = std::make_shared<pf::TapSink>(egress);
+        }
+        if (skew > 100) throw std::invalid_argument("skew percentage must be 0..100");
+        if ((prebuilt || skew) && source != "synthetic")
+            throw std::invalid_argument("prebuilt/skew require synthetic source");
+        if (prebuilt > 1000000 || (prebuilt && traffic.size > (size_t(256) << 20) / prebuilt))
+            throw std::invalid_argument("prebuilt corpus exceeds 256 MiB or 1000000 packets");
+        std::vector<std::vector<uint8_t>> corpus;
+        if (prebuilt) {
+            pf::TrafficGenerator gen(traffic); corpus.reserve(prebuilt);
+            for (size_t i = 0; i < prebuilt; ++i) corpus.push_back(gen.packet(i));
+        }
         std::signal(SIGINT, on_signal);
         std::signal(SIGTERM, on_signal);
         auto run = [&](auto& engine) {
             if (source == "synthetic") {
                 pf::TrafficGenerator gen(traffic);
                 for (size_t i = 0; i < packets && !interrupted; ++i) {
-                    auto& p = gen.packet(i);
+                    const size_t index = (i % 100 < skew) ? 0 : i;
+                    const auto& p = prebuilt ? corpus[index % corpus.size()] : gen.packet(index);
                     engine.submit(p.data(), p.size(), wait);
                 }
             } else if (source == "pcap") {

@@ -4,14 +4,18 @@ namespace pf {
 Baseline::Baseline(Config c) : config_(c), start_(now_ns()) {//in the baseline version the packets are COPIED from each layer , we use the baseline model to show that the optimized method really make better performance
     if (!c.workers || c.workers > 256 || !c.ring_capacity)
         throw std::invalid_argument("invalid baseline configuration");
+    if (!c.batch_size || c.batch_size > 65536) throw std::invalid_argument("batch must be 1..65536");
     stats_.queue_high_water.resize(c.workers); // the timestamp starts in the construction moment therefore we have extra time for threads initiliaztion overhead
     // high water mark is the maximum capacity of packets for one worker
     for (size_t i = 0; i < c.workers; ++i)
         queues_.push_back(std::make_unique<Queue>());
+    for (auto& q : queues_) q->processor = std::make_unique<Processor>(c.rules, c.flow_capacity);
     try {
+        size_t starting = 0;
         for (auto& qp : queues_) {
+            if (++starting == c.faults.fail_start_worker) throw std::runtime_error("injected worker start failure");
             auto* q = qp.get();// qp is unique ptr
-            q->thread = std::thread([q] {// creats worker thread
+            q->thread = std::thread([q, sink = c.sink] {// creats worker thread
                 for (;;) {
                     Item item; //Queue -> deque<item> , this is the payload
                     {
@@ -28,14 +32,25 @@ Baseline::Baseline(Config c) : config_(c), start_(now_ns()) {//in the baseline v
                     if (pf_parse_packet(item.payload.data(), item.payload.size(), &parsed) !=
                         PF_OK) {
                         ++q->stats.drops; //if parcing failed we drop it
+                        ++q->stats.malformed;
                         continue;
                     } // in the baseline model we parce twice : in submit and in when worker finishes , this performs calssification and adds overhead
+                    if (!q->processor->accept(parsed, item.payload.size())) {
+                        ++q->stats.drops; ++q->stats.policy_drops; continue;
+                    }
+                    try {
                     std::vector<uint8_t> tx(item.payload); // Deliberate baseline TX payload copy. : copy from RX to TX vector
+                    if (sink && !sink->write(tx.data(), tx.size())) {
+                        ++q->stats.drops; ++q->stats.egress_drops; continue;
+                    }
                     ++q->stats.packets;
                     q->stats.bytes += tx.size();
                     q->stats.digest += tx.size() + tx.back();//The digest is a lightweight checksum-like accumulator used mainly so benchmark work has an observable result; it is not a cryptographic hash.”
                     if (item.started)
                         q->stats.latency.add(now_ns() - item.started);//latency
+                    } catch (const std::bad_alloc&) {
+                        ++q->stats.drops; ++q->stats.allocation_drops;
+                    }
                 }
             });
         }
@@ -54,8 +69,13 @@ Baseline::Baseline(Config c) : config_(c), start_(now_ns()) {//in the baseline v
     }
 }
 Baseline::~Baseline() {
-    if (!finished_)
-        finish();
+    if (!finished_) {
+        for (auto& q : queues_) {
+            { std::lock_guard<std::mutex> lock(q->mutex); q->stop = true; }
+            q->ready.notify_one();
+        }
+        for (auto& q : queues_) if (q->thread.joinable()) q->thread.join();
+    }
 }
 bool Baseline::submit(const uint8_t* p, size_t n, bool wait) {
     if (finished_)
@@ -95,6 +115,8 @@ Stats Baseline::finish() {
         }
         q->ready.notify_one();
     }
+    for (auto& q : queues_) if (q->thread.joinable()) q->thread.join();
+    finished_ = true;
     std::vector<uint64_t> samples;
     for (auto& q : queues_) {
         if (q->thread.joinable())
@@ -105,6 +127,18 @@ Stats Baseline::finish() {
         stats_.bytes += s.bytes;
         stats_.digest += s.digest;
         stats_.dropped += s.drops;
+        stats_.allocation_drops += s.allocation_drops;
+        stats_.policy_drops += s.policy_drops;
+        stats_.egress_drops += s.egress_drops;
+        stats_.malformed += s.malformed;
+        stats_.recycled += s.recycled;
+        const auto& table = (*q->processor).flows;
+        stats_.flow_capacity += table.entries().size();
+        stats_.active_flows += table.active();
+        stats_.flow_evictions += table.evictions();
+        stats_.flow_collisions += table.collisions();
+        stats_.flows.push_back(table.entries());
+        stats_.tx_high_water.push_back(s.tx_high_water);
         stats_.per_worker.push_back(s.packets);
         stats_.worker_bytes.push_back(s.bytes);
         stats_.worker_drops.push_back(s.drops);

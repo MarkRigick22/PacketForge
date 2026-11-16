@@ -7,6 +7,9 @@ namespace pf {
 struct Config {
     size_t workers = 4, ring_capacity = 256, buffers = 4096, buffer_size = 2048;
     FaultInjection faults;
+    std::vector<Rule> rules;
+    size_t flow_capacity = 0, batch_size = 32;
+    std::shared_ptr<FrameSink> sink;
 };
 class Dataplane {
     Config config_;
@@ -38,6 +41,7 @@ class Baseline {
         std::deque<Item> items;
         bool stop = false;
         WorkerStats stats;
+        std::unique_ptr<Processor> processor;
         std::thread thread;
     };
     Config config_;

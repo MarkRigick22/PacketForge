@@ -73,3 +73,18 @@ TEST(pcap_invalid_and_truncated) {
     THROWS(pf::PcapReader(t.path.string()));
 #endif
 }
+
+#include "packetforge/dataplane.hpp"
+TEST(pcap_policy_end_to_end) {
+#if PF_PCAP
+    TempFile t; write_pcap(t.path, true, false);
+    pf::PcapReader r(t.path.string()); std::vector<uint8_t> p;
+    pf::Config c; pf::Rule rule; rule.action = pf::Action::Drop; rule.protocol = 6;
+    c.rules = {rule}; c.flow_capacity = 4;
+    pf::Dataplane a(c); pf::Baseline b(c);
+    while (r.next(p)) { a.submit(p.data(), p.size()); b.submit(p.data(), p.size()); }
+    auto x = a.finish(), y = b.finish();
+    CHECK(x.received == 1 && x.policy_drops == 1 && !x.buffers_in_use);
+    CHECK(x.active_flows == 1 && y.active_flows == 1 && y.policy_drops == 1);
+#endif
+}

@@ -8,6 +8,7 @@
 #include <net/if.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 ///A TAP interface is a virtual Ethernet interface created and managed by the Linux kernel.It lets a userspace application exchange Ethernet frames with the Linux networking stack.In PacketForge, TAP provides a way to receive live Ethernet traffic without implementing a real NIC driver.An important distinction:- TAP handles Layer 2 Ethernet frames.
@@ -68,6 +69,35 @@ bool Tap::read(std::vector<uint8_t>& packet, int timeout_ms) {
 #else
     (void)packet;
     (void)timeout_ms;
+    return false;
+#endif
+}
+} // namespace pf
+
+namespace pf {
+std::string TapSink::checked(const std::string& name) {
+#if PF_TAP
+    struct stat self{}, init{};
+    if (name.rfind("pf-", 0) != 0 || name.size() >= IFNAMSIZ)
+        throw std::invalid_argument("egress TAP name must start with pf- and fit IFNAMSIZ");
+    if (::stat("/proc/self/ns/net", &self) || ::stat("/proc/1/ns/net", &init) ||
+        (self.st_ino == init.st_ino && self.st_dev == init.st_dev))
+        throw std::invalid_argument("TAP egress requires a separate test network namespace (ip netns exec)");
+#endif
+    return name;
+}
+bool Tap::write_frame(const uint8_t* data, size_t length) noexcept {
+#if PF_TAP
+    // TAP writes are frame-oriented. A short write is a failed frame, never send its suffix.
+    // O_NONBLOCK bounds shutdown: EAGAIN drops immediately, no retry queue or retained payload.
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        auto n = ::write(fd_, data, length);
+        if (n >= 0) return static_cast<size_t>(n) == length;
+        if (errno != EINTR) return false;
+    }
+    return false;
+#else
+    (void)data; (void)length;
     return false;
 #endif
 }

@@ -9,11 +9,14 @@ Dataplane::Dataplane(Config c)
     stats_.queue_high_water.resize(c.workers);
     size_t quota = std::min(c.buffers / c.workers, c.ring_capacity * 2);
     for (size_t i = 0; i < c.workers; ++i)
-        workers_.push_back(std::make_unique<Worker>(device_.queue(i), pool_, quota, c.faults));
+        workers_.push_back(std::make_unique<Worker>(device_.queue(i), pool_, quota, c.faults, c.rules, c.flow_capacity, c.batch_size, c.sink));
     device_.start();
     try {
-        for (auto& w : workers_)
+        size_t starting = 0;
+        for (auto& w : workers_) {
+            if (++starting == c.faults.fail_start_worker) throw std::runtime_error("injected worker start failure");
             w->start();
+        }
     } catch (...) {
         for (auto& w : workers_)
             w->stop();
@@ -23,8 +26,11 @@ Dataplane::Dataplane(Config c)
     }
 }
 Dataplane::~Dataplane() {
-    if (!finished_)
-        finish();
+    if (!finished_) {
+        for (auto& w : workers_) w->stop();
+        for (auto& w : workers_) w->join();
+        device_.stop();
+    }
 }
 bool Dataplane::submit(const uint8_t* data, size_t n, bool wait) {
     if (finished_)
@@ -79,6 +85,8 @@ Stats Dataplane::finish() {
         w->stop();
     for (auto& w : workers_)
         w->join();
+    finished_ = true;
+    device_.stop();
     std::vector<uint64_t> samples;
     for (auto& w : workers_) {
         auto& s = w->stats;
@@ -87,7 +95,19 @@ Stats Dataplane::finish() {
         stats_.bytes += s.bytes;
         stats_.digest += s.digest;
         stats_.dropped += s.drops;
+        stats_.allocation_drops += s.allocation_drops;
+        stats_.policy_drops += s.policy_drops;
+        stats_.egress_drops += s.egress_drops;
+        stats_.malformed += s.malformed;
+        stats_.recycled += s.recycled;
+        const auto& table = (w->processor).flows;
+        stats_.flow_capacity += table.entries().size();
+        stats_.active_flows += table.active();
+        stats_.flow_evictions += table.evictions();
+        stats_.flow_collisions += table.collisions();
+        stats_.flows.push_back(table.entries());
         stats_.tx_full += w->tx_full;
+        stats_.tx_high_water.push_back(s.tx_high_water);
         stats_.per_worker.push_back(s.packets);
         stats_.worker_bytes.push_back(s.bytes);
         stats_.worker_drops.push_back(s.drops);

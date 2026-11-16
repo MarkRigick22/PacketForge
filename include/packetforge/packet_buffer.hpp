@@ -17,7 +17,7 @@ struct alignas(64) PacketBuffer {
             (from == Ownership::Host &&
              (to == Ownership::DeviceRx || to == Ownership::Free || to == Ownership::Cached)) ||
             (from == Ownership::DeviceRx && (to == Ownership::Worker || to == Ownership::Host)) ||
-            (from == Ownership::Worker && to == Ownership::DeviceTx) ||
+            (from == Ownership::Worker && (to == Ownership::DeviceTx || to == Ownership::Cached)) ||
             (from == Ownership::DeviceTx && to == Ownership::Cached) ||
             (from == Ownership::Cached && to == Ownership::Host);
         if (!allowed || !state.compare_exchange_strong(from, to, std::memory_order_relaxed))

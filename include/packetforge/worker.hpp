@@ -10,15 +10,23 @@ class Worker {
     LocalCache cache_;
     size_t quota_;
     FaultInjection faults_;
+    size_t batch_size_;
+    std::shared_ptr<FrameSink> sink_;
     std::atomic<bool> stop_{false};
     std::thread thread_;
     void run();
 
   public:
     WorkerStats stats;
+    Processor processor;
     uint64_t tx_full = 0;
-    Worker(QueuePair& q, MemoryPool& p, size_t quota, FaultInjection faults)
-        : q_(q), cache_(p, quota), quota_(quota), faults_(faults) {}
+    Worker(QueuePair& q, MemoryPool& p, size_t quota, FaultInjection faults,
+           const std::vector<Rule>& rules = {}, size_t flow_capacity = 0, size_t batch = 32,
+           std::shared_ptr<FrameSink> sink = {})
+        : q_(q), cache_(p, quota), quota_(quota), faults_(faults), batch_size_(batch),
+          sink_(std::move(sink)), processor(rules, flow_capacity) {
+        if (!batch || batch > 65536) throw std::invalid_argument("batch must be 1..65536");
+    }
     ~Worker() {
         stop();
         join();
