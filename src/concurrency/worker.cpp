@@ -19,13 +19,13 @@ void Worker::run() {
     auto complete = [&] { //if there still Tx packets process them
         Descriptor d;
         while (q_.complete_tx(d)) {
-            if (d.started_ns)
-                stats.latency.add(now_ns() - d.started_ns);
             if (sink_ && !sink_->write(d.buffer->data, d.length)) {
                 ++stats.drops; ++stats.egress_drops;
                 cache_.recycle(d.buffer); ++stats.recycled; --owned;
                 continue;
             }
+            if (d.started_ns)
+                stats.latency.add(now_ns() - d.started_ns);
             ++stats.packets;
             stats.bytes += d.length;
             // Clarification: this accumulator is not a cryptographic hash.

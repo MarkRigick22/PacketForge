@@ -101,6 +101,7 @@ TEST(egress_failure_is_accounted_and_reclaimed) {
     auto x = a.finish(), y = b.finish();
     CHECK(x.egress_drops == 1000 && y.egress_drops == 1000);
     CHECK(!x.transmitted && !x.buffers_in_use && x.recycled == 1000);
+    CHECK(x.p50_us == 0 && y.p50_us == 0);
 }
 TEST(batch_larger_than_tx_ring_is_lossless) {
     pf::Config c; c.workers = 1; c.ring_capacity = 2; c.buffers = 4; c.batch_size = 64;
