@@ -7,29 +7,29 @@
 namespace pf {
 // Exactly one producer and one consumer; the same thread may play both roles.
 template <class T> class SpscRing {
-    static_assert(std::is_trivially_copyable<T>::value, "Descriptors must be trivial");
-    static_assert(std::atomic<size_t>::is_always_lock_free, "This target lacks lock-free indices");
-    std::vector<T> slots_;
-    alignas(64) std::atomic<size_t> head_{0};
+    static_assert(std::is_trivially_copyable<T>::value, "Descriptors must be trivial");//the type of object we put in the ring must be simple to copy
+    static_assert(std::atomic<size_t>::is_always_lock_free, "This target lacks lock-free indices");//lock free SPSC
+    std::vector<T> slots_;//the real storage ring
+    alignas(64) std::atomic<size_t> head_{0}; // we want both head and tail to be in diffrent cache lines becuase producer uses head frequntly and consumer uses tail freq - causes thrashing
     alignas(64) std::atomic<size_t> tail_{0};
 
   public:
     explicit SpscRing(size_t capacity) : slots_(checked(capacity)) {}
     static size_t checked(size_t n) {
-        if (n < 1 || n > (size_t(1) << 28))
+        if (n < 1 || n > (size_t(1) << 28))//bit shift 289 million to avoid big allocation
             throw std::invalid_argument("ring capacity out of range");
-        return n + 1;
+        return n + 1;//crcuilar ring
     }
     size_t capacity() const {
         return slots_.size() - 1;
     }
     bool push(const T& v) {
-        auto h = head_.load(std::memory_order_relaxed);
+        auto h = head_.load(std::memory_order_relaxed);//relaxedd bacause the producer is the only one that changes head no need to sync
         auto next = (h + 1) % slots_.size();
-        if (next == tail_.load(std::memory_order_acquire))
+        if (next == tail_.load(std::memory_order_acquire))//check if full
             return false;
         slots_[h] = v;
-        head_.store(next, std::memory_order_release);
+        head_.store(next, std::memory_order_release);//update head
         return true;
     }
     bool pop(T& v) {
@@ -44,7 +44,7 @@ template <class T> class SpscRing {
         return head_.load(std::memory_order_acquire) == tail_.load(std::memory_order_acquire);
     }
     // Advisory only: independent snapshots are not a synchronization primitive.
-    size_t approximate_size() const {
+    size_t approximate_size() const {//approximate because consumer/producer runs in parller
         auto h = head_.load(std::memory_order_acquire);
         auto t = tail_.load(std::memory_order_acquire);
         return (h + slots_.size() - t) % slots_.size();

@@ -1,0 +1,43 @@
+name: C and C++ verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - name: Configure
+        shell: bash
+        run: |
+          if [[ '${{ matrix.compiler }}' == gcc ]]; then export CC=gcc CXX=g++; else export CC=clang CXX=clang++; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DPACKETFORGE_WARNINGS_AS_ERRORS=ON
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+      - run: python3 tools/audit_comments.py
+      - run: python3 tools/check_changed_format.py
+      - run: bash -n tools/run_benchmarks.sh tools/profile_linux.sh tools/linux_performance.sh tools/test_tap_namespace.sh
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DPACKETFORGE_ASAN=ON -DPACKETFORGE_UBSAN=ON -DPACKETFORGE_WARNINGS_AS_ERRORS=ON
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+  parser-fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: CC=clang CXX=clang++ cmake -S . -B build -DPACKETFORGE_FUZZ=ON
+      - run: cmake --build build --target fuzz_parser --parallel 2
+      - run: ./build/fuzz_parser -runs=100000 -seed=42 -max_len=4096

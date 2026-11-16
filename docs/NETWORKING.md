@@ -64,3 +64,9 @@ Thus the ratio is exact over full groups of 100 flow ids, approximate otherwise;
 a configuration with one flow necessarily chooses one transport protocol. Payloads
 are deterministic for a seed, flow id and frame size. PCAP timestamps are validated
 but replay is as fast as the host allows, without inter-packet pacing.
+
+## Upgrade clarification
+
+The default remains simulated TX; optional distinct TAP output is now implemented.
+See [TAP egress](TAP_EGRESS.md) for isolation, copying, error handling and unexecuted
+Linux validation. Unsupported VLAN/fragmented traffic is safely rejected.

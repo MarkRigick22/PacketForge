@@ -99,3 +99,9 @@ at TX. Both feed the same C parser, hash and completion digest workload.
 The CLI handles SIGINT/SIGTERM using a signal-safe flag. TAP poll wakes every
 100 ms to check it. Current accepted work drains before exit. An offline source
 is unpaced and never changes network interfaces.
+
+## Upgrade clarification
+
+Workers now observe bounded flow state and apply optional ordered policy before TX.
+Default TX remains the sink; optional isolated TAP egress is explicit. Read
+[packet processing](PACKET_PROCESSING.md) for the updated invariants.

@@ -95,3 +95,9 @@ The worker checks stop after consuming a batch; this keeps draining predictable.
 Tests stress 500,000 ordered queue transfers, eight concurrent cache users,
 1/2/4/8-worker packet accounting and immediate shutdown. Run TSAN separately;
 passing tests and race detection provide evidence, not a proof for all schedules.
+
+## Upgrade clarification
+
+Policy vectors are immutable and flow tables are worker-local. Optional TAP output
+adds a shared serialization mutex; it does not change SPSC roles. Destructors drain
+without constructing reports; post-join flow snapshots are allocated by finish().

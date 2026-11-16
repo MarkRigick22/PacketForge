@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 namespace pf {
+//raffic.cpp is a synthetic network traffic generator Its job is to create fake but properly structured network packets so we can test and benchmark our PacketForge dataplane without needing a real Network Interface Card (NIC) or actual incoming network traffic.
 static void be16(uint8_t* p, uint16_t x) {
     p[0] = x >> 8;
     p[1] = x & 255;

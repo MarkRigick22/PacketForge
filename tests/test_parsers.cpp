@@ -123,3 +123,11 @@ TEST(generator_deterministic) {
     CHECK(a.packet(123) != c.packet(123));
     THROWS(pf::TrafficGenerator({10, 1, 1, 50}));
 }
+
+TEST(vlan_and_null_inputs_are_safe) {
+    pf::TrafficGenerator gen; auto p = gen.packet(0); pf_packet out{};
+    p[12] = 0x81; p[13] = 0;
+    CHECK(pf_parse_packet(p.data(), p.size(), &out) == PF_UNSUPPORTED);
+    CHECK(pf_parse_packet(nullptr, 0, &out) != PF_OK);
+    CHECK(pf_parse_packet(p.data(), p.size(), nullptr) == PF_MALFORMED);
+}

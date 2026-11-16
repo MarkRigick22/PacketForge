@@ -1,0 +1,2 @@
+# ACTION SRC DST SPORT DPORT PROTO; first matching line wins; no match allows.
+DROP * * * * 17

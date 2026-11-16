@@ -4,7 +4,7 @@ bool QueuePair::post_rx(Descriptor d) {
     if (!rx.push(d))
         return false;
     registers.rx_tail.fetch_add(1, std::memory_order_relaxed);
-    registers.rx_doorbell.fetch_add(1, std::memory_order_relaxed);
+    registers.rx_doorbell.fetch_add(1, std::memory_order_relaxed);//"new  RX work avaiable"
     return true;
 }
 bool QueuePair::take_rx(Descriptor& d) {

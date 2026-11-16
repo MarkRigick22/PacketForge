@@ -79,3 +79,8 @@ application dataplane stage transfers. PCAP file I/O and TAP kernel I/O may copy
 completion count and final global reclamation through an actual running worker.
 Concurrent cache tests independently check that no buffer is leased to two workers
 at once. ASAN/UBSAN and TSAN builds complement, but cannot prove, lifetime safety.
+
+## Upgrade clarification
+
+Policy rejects now use Worker -> Cached without a TX publication. See
+[packet processing](PACKET_PROCESSING.md) for every rejection/shutdown path.

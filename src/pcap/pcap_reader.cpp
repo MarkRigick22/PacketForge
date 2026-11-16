@@ -1,6 +1,9 @@
 #include "packetforge/pcap_reader.hpp"
 #include <stdexcept>
 namespace pf {
+//Reads previously recorded network packets in offline mode and does not require linux , used for Testing, debugging, replaying traffic
+//PCAP: "I recorded 10,000 packets yesterday. Process those packets again."
+//TAP: "Packets are arriving at my virtual network interface right now. Process them."
 uint32_t PcapReader::u32(const uint8_t* p) const {
     if (little_)
         return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) |
@@ -43,7 +46,7 @@ PcapReader::PcapReader(const std::string& path) {
 }
 bool PcapReader::next(std::vector<uint8_t>& packet) {
     uint8_t h[16];
-    file_.read(reinterpret_cast<char*>(h), 16);
+    file_.read(reinterpret_cast<char*>(h), 16);//It reads the 16-byte header for the next packet.
     if (file_.gcount() == 0 && file_.eof())
         return false;
     if (file_.gcount() != 16)

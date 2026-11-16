@@ -1,0 +1,14 @@
+name: ThreadSanitizer (separate runtime)
+on: [workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tsan:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: CC=gcc CXX=g++ cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DPACKETFORGE_TSAN=ON
+      - run: cmake --build build-tsan --parallel 2
+      - run: ctest --test-dir build-tsan --output-on-failure
+        env:
+          TSAN_OPTIONS: halt_on_error=1

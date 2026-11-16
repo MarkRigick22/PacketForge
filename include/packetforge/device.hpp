@@ -7,7 +7,7 @@ enum class DeviceStatus { Reset, Running, Stopped };
 struct Registers {
     std::atomic<DeviceStatus> status{DeviceStatus::Reset};
     std::atomic<uint64_t> control{0}, rx_head{0}, rx_tail{0}, tx_head{0}, tx_tail{0};
-    std::atomic<uint64_t> rx_doorbell{0}, tx_doorbell{0};
+    std::atomic<uint64_t> rx_doorbell{0}, tx_doorbell{0};// doorbell :"i puted new work in queue (rx/tx) go check it "
 };
 struct QueuePair {
     SpscRing<Descriptor> supply, rx, tx;
@@ -24,7 +24,7 @@ class Device {
   public:
     Device(size_t workers, size_t capacity);
     QueuePair& queue(size_t i) {
-        return *queues_.at(i);
+        return *queues_.at(i);// dereference the unique pointer
     }
     void start();
     void stop();

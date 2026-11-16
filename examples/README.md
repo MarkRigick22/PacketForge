@@ -66,5 +66,5 @@ Manual cleanup after stopping PacketForge:
 sudo ip netns del pf-demo
 ```
 
-The TAP adapter requires a Linux build and appropriate interface permissions.
-Non-Linux builds provide an explicit unsupported-platform error.
+Linux TAP headers/code and live permissions cannot be validated by a macOS run.
+A Linux build and this manual test are separate validation steps.
