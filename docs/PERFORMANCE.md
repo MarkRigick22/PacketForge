@@ -120,3 +120,9 @@ results. A currently defensible alternative is: “Benchmarked a C/C++ simulated
 NIC datapath against an allocation-and-copy baseline, measuring throughput,
 sampled tail latency, process memory and worker scaling.” Add Linux/cache-profiling
 claims only after completing that experiment yourself.
+
+## Upgrade clarification
+
+The measurements above are historical. New macOS-only results, factor controls and
+raw CSV are in [upgrade results](upgrade/performance-results.md). They are not Linux
+results. See [methodology](benchmark-methodology.md) and [Linux status](linux-performance-analysis.md).

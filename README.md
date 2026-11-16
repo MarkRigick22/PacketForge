@@ -1,5 +1,38 @@
 # PacketForge
 
+## Engineering upgrade (2026-11-16)
+
+PacketForge remains a **user-space software NIC simulator**. The current datapath
+adds ordered IPv4 five-tuple ALLOW/DROP rules, bounded per-worker flow statistics,
+explicit policy/egress drop accounting, and optional isolated Linux TAP output.
+The baseline runs the same processing workload. The original explanations below
+are retained; statements describing sink-only TX refer to the default mode.
+
+```sh
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DPACKETFORGE_WARNINGS_AS_ERRORS=ON
+cmake --build build-release --parallel
+ctest --test-dir build-release --output-on-failure
+./build-release/packetforge --packets 10000 --workers 4 --rules examples/drop-udp.rules --flow-capacity 1024 --csv
+python3 tools/audit_comments.py
+```
+
+With default synthetic traffic, the example allows 5,000 TCP frames and policy-drops
+5,000 UDP frames; all buffers return to the pool. Flow accounting includes both.
+
+- [Policy, flows, ownership and failure paths](docs/PACKET_PROCESSING.md)
+- [Benchmark methodology and reproducible sweeps](docs/benchmark-methodology.md)
+- [Actual new macOS measurements](docs/upgrade/performance-results.md)
+- [Linux profiling commands and execution status](docs/linux-performance-analysis.md)
+- [Optional TAP output and isolated namespace demo](docs/TAP_EGRESS.md)
+- [Verification, file inventory and remaining limitations](docs/upgrade/verification.md)
+- [15 technical interview questions with code references](docs/technical-interview-guide.md)
+
+Linux GCC/Clang Debug/Release, ASan/UBSan and parser fuzzing workflows are included;
+TSan has a separate workflow. **Hosted CI and real TAP egress have not been executed
+here.** Local macOS Debug/Release, ASan/UBSan and TSan checks passed. No badge claims
+a remote passing status. Historical performance figures below remain historical.
+
+
 **High-Performance NIC Firmware & Packet Processing Engine — a software model.**
 
 PacketForge is a C11/C++17 systems project for studying descriptor-based packet
