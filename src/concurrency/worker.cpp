@@ -3,7 +3,8 @@ namespace pf {
 void Worker::run() {
     size_t owned = 0, ordinal = 0;
     // Quotas keep one worker from hoarding the entire shared arena.
-    auto refill = [&] {
+    auto refill = [&] {//lamdpa expression help us use variables from enviromeent like: owned_ / quata/ cache
+        
         while (q_.supply.approximate_size() < q_.supply.capacity() && owned < quota_) {
             auto* b = cache_.acquire();
             if (!b)
@@ -15,48 +16,49 @@ void Worker::run() {
             ++owned;
         }
     };
-    auto complete = [&] {
+    auto complete = [&] { //if there still Tx packets process them
         Descriptor d;
         while (q_.complete_tx(d)) {
             if (d.started_ns)
                 stats.latency.add(now_ns() - d.started_ns);
             ++stats.packets;
             stats.bytes += d.length;
-            stats.digest += d.length + d.buffer->data[d.length - 1];
+            stats.digest += d.length + d.buffer->data[d.length - 1];//d length + d last byte - for cryptogtaphic hash correctness
             cache_.recycle(d.buffer);
-            --owned;
+            --owned; // the life cycle : before Tx : worker -> Tx ring . after Tx : TX completion -> worker gets back descriptor
         }
     };
-    refill();
+    refill();//fill the supply queue with empty buffers 
     for (;;) {
         Descriptor d;
         bool work = false;
         // Process in bounded batches; the TX device model is serviced by this thread.
-        for (size_t batch = 0; batch < 32 && q_.take_rx(d); ++batch) {
+        for (size_t batch = 0; batch < 32 && q_.take_rx(d); ++batch) {//every worker process 32 packet in one cycle - bounded batches - we use it because we dont need the worker to only be stucj in RX part and ignore TX completion / refill / stop check .
             work = true;
-            ++ordinal;
-            d.buffer->transition(Ownership::DeviceRx, Ownership::Worker);
-            pf_packet parsed{};
-            const bool valid = pf_parse_packet(d.buffer->data, d.length, &parsed) == PF_OK;
+            ++ordinal;//packet counter
+            d.buffer->transition(Ownership::DeviceRx, Ownership::Worker);//very important - change the owner of the buffer from RX to worker
+            pf_packet parsed{}; // new structure that takes the results : sourcIP/destIP/IPv4 field....
+            const bool valid = pf_parse_packet(d.buffer->data, d.length, &parsed) == PF_OK; // take the bytes of the packet and try to split them to fileds .
             d.buffer->transition(Ownership::Worker, Ownership::DeviceTx);
-            d.ownership = Ownership::DeviceTx;
+            d.ownership = Ownership::DeviceTx; // move the ownership to Tx
             if (!valid || reject_nth(ordinal, faults_.reject_tx_every) || !q_.post_tx(d)) {
                 ++stats.drops;
                 if (valid)
                     ++tx_full;
-                cache_.recycle(d.buffer);
+                cache_.recycle(d.buffer);// even when a packet drops , the buffer must return
                 --owned;
             }
         }
-        complete();
-        if (stop_.load(std::memory_order_acquire) && q_.rx.empty())
+        complete(); //check which Tx operations finished and return their buffers
+        if (stop_.load(std::memory_order_acquire) && q_.rx.empty())//check the rx because we dont want to lose packets in RX
+            // the stop_.load is atomic operation , memory order auquire job is to keep the memory oredering between threads -
             break;
         refill();
         if (!work)
             std::this_thread::yield();
     }
     Descriptor d;
-    while (q_.supply.pop(d)) {
+    while (q_.supply.pop(d)) { // recycle every buffer who is in supply ring that havent been proccessed before exiting
         cache_.recycle(d.buffer);
         --owned;
     }

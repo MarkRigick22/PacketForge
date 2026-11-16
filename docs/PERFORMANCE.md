@@ -80,7 +80,7 @@ register updates, head/tail coherence traffic, hashing, source checksums and idl
 worker polling. A single ingress thread can saturate while extra workers add
 scheduling overhead. A busy flow stays on one worker. On heterogeneous CPUs and
 shared machines, more workers may be slower. Quotas can leave unused buffers tied
-to idle queues. These tradeoffs can limit scaling even when per-packet allocation is reduced.
+to idle queues. These are defensible tradeoffs, not unexplained benchmark anomalies.
 
 ## Linux perf
 
@@ -107,12 +107,16 @@ policy; the helper never changes `perf_event_paranoid` or other system settings.
 On macOS, `/usr/bin/time -l` supplies runtime, RSS, page-fault and context-switch
 observations. It cannot substitute for Linux hardware cache-counter evidence.
 
-## Interpreting comparisons
+## Optimization study and honest claims
 
-The optimized datapath replaces per-packet allocations, copies and mutex queues
-with preallocated descriptor transport and local buffer reuse. Benchmark results
-quantify that tradeoff for a particular workload; they do not establish a universal
-speedup, physical NIC throughput or reduced cache misses without hardware-counter
-evidence. Preserve the workload configuration and repeated measurements when
-comparing changes. Higher reserved or resident memory can be a deliberate cost of
-preallocation even when throughput improves.
+Read `VALIDATION.md` for this delivery's actual measurements. The implemented
+optimization is a structural change from allocations/copies/mutex queues to
+preallocated descriptor transport with local reuse; measured comparison is the
+evidence for its effect on this workload. Do not infer a universal speedup, real
+NIC performance or Linux perf/cache behavior from a macOS synthetic run.
+
+Before using the requested fourth CV bullet verbatim, run and preserve Linux perf
+results. A currently defensible alternative is: “Benchmarked a C/C++ simulated
+NIC datapath against an allocation-and-copy baseline, measuring throughput,
+sampled tail latency, process memory and worker scaling.” Add Linux/cache-profiling
+claims only after completing that experiment yourself.
